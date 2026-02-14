@@ -1,0 +1,14 @@
+Model: wafflelover404_emotion_model.pth
+Rank: #3
+Accuracy: 0.484675
+F1 Macro: 0.427546
+Avg ROC AUC: 0.815442
+
+ROC AUC by class:
+angry: 0.760731
+disgust: 0.874431
+fear: 0.709116
+happy: 0.904160
+neutral: 0.795754
+sad: 0.762737
+surprise: 0.901164

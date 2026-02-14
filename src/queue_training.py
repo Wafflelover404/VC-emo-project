@@ -32,55 +32,11 @@ TRAINING_QUEUE = [
         "model_type": "resnet18",
         "img_size": 224,
         "batch_size": 32,
-        "epochs": 5,
+        "epochs": 30,
         "lr": 0.0003,
         "weight_decay": 0.01,
         "unfreeze": "layer4",
         "description": "Baseline ResNet18 with current hyperparameters"
-    },
-    {
-        "name": "resnet18_fast",
-        "model_type": "resnet18",
-        "img_size": 128,
-        "batch_size": 64,
-        "epochs": 3,
-        "lr": 0.001,
-        "weight_decay": 0.0,
-        "unfreeze": "none",
-        "description": "Fast ResNet18 with smaller input size"
-    },
-    {
-        "name": "mobilenet_v2_small",
-        "model_type": "mobilenet_v2",
-        "img_size": 128,
-        "batch_size": 64,
-        "epochs": 5,
-        "lr": 0.0005,
-        "weight_decay": 0.01,
-        "unfreeze": "layer4",
-        "description": "MobileNetV2 for efficiency"
-    },
-    {
-        "name": "efficientnet_b0",
-        "model_type": "efficientnet_b0",
-        "img_size": 128,
-        "batch_size": 32,
-        "epochs": 5,
-        "lr": 0.0003,
-        "weight_decay": 0.01,
-        "unfreeze": "layer4",
-        "description": "EfficientNet-B0 for better accuracy/size ratio"
-    },
-    {
-        "name": "resnet34_deep",
-        "model_type": "resnet34",
-        "img_size": 224,
-        "batch_size": 24,
-        "epochs": 5,
-        "lr": 0.0002,
-        "weight_decay": 0.01,
-        "unfreeze": "layer4",
-        "description": "Deeper ResNet34 for better accuracy"
     }
 ]
 

@@ -1,0 +1,14 @@
+Model: resnet18_baseline_20260214_032948.pth
+Rank: #2
+Accuracy: 0.487740
+F1 Macro: 0.427576
+Avg ROC AUC: 0.811522
+
+ROC AUC by class:
+angry: 0.765194
+disgust: 0.849268
+fear: 0.702735
+happy: 0.893836
+neutral: 0.804933
+sad: 0.763014
+surprise: 0.901677

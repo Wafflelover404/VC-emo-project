@@ -1,0 +1,14 @@
+Model: resnet18_fast_20260214_034900.pth
+Rank: #5
+Accuracy: 0.346336
+F1 Macro: 0.319071
+Avg ROC AUC: 0.740230
+
+ROC AUC by class:
+angry: 0.677798
+disgust: 0.738216
+fear: 0.644933
+happy: 0.803765
+neutral: 0.735282
+sad: 0.716328
+surprise: 0.865290

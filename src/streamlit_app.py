@@ -706,6 +706,9 @@ def main() -> None:
         img_size = int(os.environ.get('IMG_SIZE', '128'))
         detect_faces_flag = st.toggle('Искать лица', value=True)
         show_probs = st.toggle('Показывать таблицу вероятностей', value=True)
+        scale_factor = st.slider('Масштаб (детекция лиц)', min_value=1.05, max_value=1.50, value=1.10, step=0.01)
+        min_neighbors = st.slider('Минимальные соседи', min_value=3, max_value=10, value=5, step=1)
+        batch_size = st.number_input('Batch size', min_value=1, max_value=128, value=32)
 
     if not os.path.isfile(model_path):
         st.error('Файл модели не найден. Выберите модель или загрузите модель в папку models/.')
@@ -823,7 +826,6 @@ def main() -> None:
                         df_data.append(result)
 
                 if df_data:
-                    import pandas as pd
                     df = pd.DataFrame(df_data)
 
                     st.subheader("Общая статистика")
@@ -866,54 +868,28 @@ def main() -> None:
                     st.warning("Нет успешно обработанных изображений")
 
     with tab_metrics:
-        st.subheader('Метрики модели')
+        st.subheader('Метрики и ROC модели')
 
-        metrics_dir = 'metrics'
-        saved = read_saved_metrics(metrics_dir)
+        col_test1, col_test2 = st.columns([2, 1])
+        with col_test1:
+            test_path = st.text_input('Путь к тестовому набору', value='test', key='metrics_test_path')
+        with col_test2:
+            st.metric("Batch size", batch_size)
 
-        if saved:
-            col_a, col_b = st.columns(2)
-            if 'accuracy' in saved:
-                col_a.metric('Accuracy', f'{saved["accuracy"]:.4f}')
-            if 'f1_score' in saved:
-                col_b.metric('F1 macro', f'{saved["f1_score"]:.4f}')
+        calculate_button = st.button('📊 Вычислить метрики', type='primary')
 
-            if 'roc_auc' in saved and saved['roc_auc']:
-                st.markdown('### ROC AUC по классам')
-                st.table(saved['roc_auc'])
-
-            if 'roc_curve_png' in saved:
-                st.markdown('### ROC Curve')
-                st.image(saved['roc_curve_png'])
-
-            if 'confusion_matrix' in saved:
-                st.markdown('### Confusion Matrix')
-                st.dataframe(saved['confusion_matrix'])
-
-            if 'classification_report' in saved:
-                st.markdown('### Classification Report')
-                st.text(saved['classification_report'])
-        else:
-            st.info('Не найдены сохраненные метрики в папке metrics/. Можно пересчитать ниже.')
-
-        st.divider()
-        st.markdown('### Пересчитать метрики на тестовом наборе')
-        test_path = st.text_input('Путь к test набору', value='test')
-        batch_size = 32
-
-        if st.button('Пересчитать метрики', type='primary'):
+        if calculate_button:
             if not os.path.isdir(test_path):
                 st.error('Папка test не найдена. Укажите корректный путь.')
             else:
                 start_time = pd.Timestamp.now()
 
                 with st.spinner('🔄 Вычисляю метрики...'):
-
                     progress_bar = st.progress(0)
                     status_text = st.empty()
 
                     status_text.text('📂 Подготовка тестовых данных...')
-                    progress_bar.progress(0.25)
+                    progress_bar.progress(0.1)
 
                     data_transform = transforms.Compose([
                         transforms.Resize(img_size + 32),
@@ -927,61 +903,155 @@ def main() -> None:
 
                     total_images = len(ds)
                     expected_batches = (total_images + batch_size - 1) // batch_size
-                    status_text.text(f'📊 Найдено изображений: {total_images} (ожидается батчей: {expected_batches})')
-                    progress_bar.progress(0.4)
+                    status_text.text(f'📊 Найдено изображений: {total_images}')
+                    progress_bar.progress(0.2)
+
+                    status_text.text('🧠 Выполнение предсказаний...')
+                    
+                    all_labels: List[int] = []
+                    all_preds: List[int] = []
+                    all_probs: List[np.ndarray] = []
+
+                    model.eval()
+                    batch_count = 0
+                    
+                    with torch.no_grad():
+                        for inputs, labels in loader:
+                            inputs = inputs.to(device)
+                            labels = labels.to(device)
+                            logits = model(inputs)
+                            probs = torch.softmax(logits, dim=1)
+                            preds = torch.argmax(probs, dim=1)
+
+                            all_labels.extend(labels.detach().cpu().numpy().tolist())
+                            all_preds.extend(preds.detach().cpu().numpy().tolist())
+                            all_probs.extend(probs.detach().cpu().numpy())
+
+                            batch_count += 1
+                            progress = 0.2 + (batch_count / len(loader)) * 0.5
+                            progress_bar.progress(progress)
+                            status_text.text(f'🧠 Обработано {batch_count}/{len(loader)} батчей...')
 
                     status_text.text('📈 Вычисление метрик...')
-                    progress_bar.progress(0.75)
+                    progress_bar.progress(0.8)
 
-                    m = compute_test_metrics(
-                        model=model,
-                        device=device,
-                        test_path=test_path,
-                        img_size=img_size,
-                        batch_size=int(batch_size),
-                    )
+                    y_true = np.array(all_labels)
+                    y_pred = np.array(all_preds)
+                    y_prob = np.array(all_probs)
+
+                    acc = float(np.mean(y_true == y_pred))
+                    f1m = float(f1_score(y_true, y_pred, average='macro'))
+                    cm = confusion_matrix(y_true, y_pred)
+                    rep = classification_report(y_true, y_pred, target_names=CLASSES)
+
+                    y_true_bin = label_binarize(y_true, classes=list(range(len(CLASSES))))
+                    roc_auc: Dict[str, float] = {}
+
+                    fig_roc = plt.figure(figsize=(10, 8))
+                    for i, cls in enumerate(CLASSES):
+                        fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_prob[:, i])
+                        roc_auc[cls] = float(auc(fpr, tpr))
+                        plt.plot(fpr, tpr, label=f'{cls} (AUC = {roc_auc[cls]:.2f})')
+                    plt.plot([0, 1], [0, 1], 'k--')
+                    plt.xlim([0.0, 1.0])
+                    plt.ylim([0.0, 1.05])
+                    plt.xlabel('False Positive Rate')
+                    plt.ylabel('True Positive Rate')
+                    plt.title('ROC Curve')
+                    plt.legend(loc='lower right', fontsize=8)
 
                     progress_bar.progress(1.0)
-
                     end_time = pd.Timestamp.now()
                     duration = (end_time - start_time).total_seconds()
 
-                st.success(f"✅ Метрики пересчитаны за {duration:.2f} сек")
+                st.success(f"✅ Метрики вычислены за {duration:.2f} сек")
 
-                with st.expander("📊 Информация о тесте", expanded=True):
-                    col1, col2, col3, col4 = st.columns(4)
+                st.markdown("---")
+                st.markdown("### 📊 Основные метрики")
+                
+                col_a, col_b, col_c = st.columns(3)
+                col_a.metric('Accuracy', f'{acc:.4f}')
+                col_b.metric('F1 Macro', f'{f1m:.4f}')
+                col_c.metric('Avg ROC AUC', f'{np.mean(list(roc_auc.values())):.4f}')
 
-                    with col1:
-                        st.metric("📂 Тестовый набор", os.path.basename(test_path))
-                        st.metric("🖼️ Всего изображений", total_images)
+                col_info1, col_info2 = st.columns(2)
+                with col_info1:
+                    st.metric("Всего изображений", total_images)
+                with col_info2:
+                    st.metric("Скорость", f"{total_images/duration:.1f} img/сек")
 
-                    with col2:
-                        st.metric("📦 Батчей", len(loader))
-                        st.metric("⏱️ Время вычисления", f"{duration:.2f} сек")
+                st.markdown("---")
+                st.markdown("### 📈 ROC AUC по классам")
+                
+                roc_df = pd.DataFrame([
+                    {'Класс': cls, 'ROC AUC': auc_val}
+                    for cls, auc_val in roc_auc.items()
+                ])
+                st.dataframe(roc_df, use_container_width=True, hide_index=True)
 
-                    with col3:
-                        st.metric("🚀 Скорость", f"{total_images/duration:.1f} img/сек")
-                        st.metric("📏 Размер изображения", f"{img_size}x{img_size}")
+                st.markdown("### 🎯 ROC Curve")
+                st.pyplot(fig_roc)
 
-                    with col4:
-                        st.metric("💾 Batch size", batch_size)
-                        st.metric("🔧 Устройство", str(device))
+                st.markdown("### 🔥 Confusion Matrix")
+                fig_cm, ax_cm = plt.subplots(figsize=(10, 8))
+                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                           xticklabels=CLASSES, yticklabels=CLASSES, ax=ax_cm)
+                ax_cm.set_title('Confusion Matrix')
+                ax_cm.set_xlabel('Predicted')
+                ax_cm.set_ylabel('Actual')
+                st.pyplot(fig_cm)
 
-                col_a, col_b = st.columns(2)
-                col_a.metric('Accuracy', f'{m.accuracy:.4f}')
-                col_b.metric('F1 macro', f'{m.f1_macro:.4f}')
+                st.markdown("### 📋 Classification Report")
+                st.text(rep)
 
-                st.markdown('### ROC AUC по классам')
-                st.table(m.roc_auc)
+                st.session_state['last_metrics'] = {
+                    'accuracy': acc,
+                    'f1_macro': f1m,
+                    'roc_auc': roc_auc,
+                    'confusion': cm,
+                    'report': rep,
+                    'fig_roc': fig_roc,
+                    'test_path': test_path,
+                    'total_images': total_images,
+                    'duration': duration
+                }
 
-                st.markdown('### ROC Curve')
-                st.pyplot(m.fig_roc)
+        elif 'last_metrics' in st.session_state:
+            st.markdown("---")
+            st.markdown("### 📊 Последние вычисленные метрики")
+            
+            m = st.session_state['last_metrics']
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric('Accuracy', f"{m['accuracy']:.4f}")
+            col_b.metric('F1 Macro', f"{m['f1_macro']:.4f}")
+            col_c.metric('Avg ROC AUC', f"{np.mean(list(m['roc_auc'].values())):.4f}")
+            
+            st.info(f"Последний тест: {m['test_path']} | Изображений: {m['total_images']} | Время: {m['duration']:.2f} сек")
+            
+            st.markdown("### 📈 ROC AUC по классам")
+            roc_df = pd.DataFrame([
+                {'Класс': cls, 'ROC AUC': auc_val}
+                for cls, auc_val in m['roc_auc'].items()
+            ])
+            st.dataframe(roc_df, use_container_width=True, hide_index=True)
 
-                st.markdown('### Confusion Matrix')
-                st.dataframe(m.confusion)
+            st.markdown("### 🎯 ROC Curve")
+            st.pyplot(m['fig_roc'])
 
-                st.markdown('### Classification Report')
-                st.text(m.report)
+            st.markdown("### 🔥 Confusion Matrix")
+            fig_cm, ax_cm = plt.subplots(figsize=(10, 8))
+            sns.heatmap(m['confusion'], annot=True, fmt='d', cmap='Blues',
+                       xticklabels=CLASSES, yticklabels=CLASSES, ax=ax_cm)
+            ax_cm.set_title('Confusion Matrix')
+            ax_cm.set_xlabel('Predicted')
+            ax_cm.set_ylabel('Actual')
+            st.pyplot(fig_cm)
+
+            st.markdown("### 📋 Classification Report")
+            st.text(m['report'])
+
+        else:
+            st.info("👆 Нажмите кнопку 'Вычислить метрики' для расчета метрик модели на тестовом наборе")
 
     with tab_testing:
         st.subheader('Тестирование модели')
@@ -1115,8 +1185,6 @@ def main() -> None:
                 if all_results:
                     st.subheader("Результаты тестирования всех моделей")
 
-                    import pandas as pd
-                    import seaborn as sns
                     df = pd.DataFrame(all_results)
 
                     df = df.sort_values('accuracy', ascending=False)
@@ -2055,7 +2123,6 @@ def process_single_image(image_file, face_cascade, scale_factor, min_neighbors, 
 
             if emotion_counts:
 
-                import pandas as pd
                 stats_data = [
                     {'Эмоция': emotion, 'Количество': count, 'Процент': f"{count/len(results)*100:.1f}%"}
                     for emotion, count in emotion_counts.items()
