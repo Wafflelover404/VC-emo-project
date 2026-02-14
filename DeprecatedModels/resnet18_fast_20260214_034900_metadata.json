@@ -1,0 +1,63 @@
+{
+  "model_name": "resnet18_fast_20260214_034900",
+  "config": {
+    "name": "resnet18_fast",
+    "model_type": "resnet18",
+    "img_size": 128,
+    "batch_size": 64,
+    "epochs": 3,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "unfreeze": "none",
+    "description": "Fast ResNet18 with smaller input size"
+  },
+  "training_history": {
+    "train_loss": [
+      1.8758622329683279,
+      1.786119070657348,
+      1.7439145539811696
+    ],
+    "train_acc": [
+      0.25856003165245056,
+      0.29945313930511475,
+      0.3179838955402374
+    ],
+    "test_loss": [
+      1.5769278912465863,
+      1.6463303703988086,
+      1.6788340293122188
+    ],
+    "test_acc": [
+      0.39161327481269836,
+      0.36709389090538025,
+      0.3463360369205475
+    ],
+    "learning_rates": [
+      0.001,
+      0.00075,
+      0.0002500000000000001
+    ]
+  },
+  "evaluation_results": {
+    "accuracy": 0.34633602674839786,
+    "f1_macro": 0.31907062728381735,
+    "best_test_acc": 0.39161327481269836,
+    "roc_auc": {
+      "angry": 0.6777979814592298,
+      "disgust": 0.7382160708890579,
+      "fear": 0.6449328879082711,
+      "happy": 0.803764508648235,
+      "neutral": 0.7352820563191788,
+      "sad": 0.7163279883860871,
+      "surprise": 0.8652902145228321
+    }
+  },
+  "model_info": {
+    "total_params": 11180103,
+    "trainable_params": 3591,
+    "input_size": 128,
+    "num_classes": 7
+  },
+  "timestamp": "2026-02-14T03:51:56.164354",
+  "device": "mps"
+}
