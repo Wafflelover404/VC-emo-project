@@ -304,7 +304,7 @@ def display_model_results(model, model_path, test_path, device, img_size, batch_
             {'Класс': cls, 'ROC AUC': f'{auc:.4f}'}
             for cls, auc in metrics.roc_auc.items()
         ])
-        st.dataframe(roc_df, use_container_width=True)
+        st.dataframe(roc_df, width='stretch')
 
         st.markdown("### 🎯 Confusion Matrix")
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -350,10 +350,29 @@ def test_all_models(available_models, test_path, device, img_size, batch_size):
             progress_bar.progress(progress)
             status_text.text(f'🔄 Тестирую {i+1}/{len(available_models)}: {os.path.basename(model_file)}')
 
-            test_model = models.resnet18()
-            test_model.fc = nn.Linear(test_model.fc.in_features, len(CLASSES))
-            state = torch.load(model_file, map_location=device)
-            test_model.load_state_dict(state)
+            test_model_file = torch.load(model_file, map_location=device)
+            
+            if 'conv1.weight' in test_model_file:
+                test_model = models.resnet18()
+                test_model.fc = nn.Linear(test_model.fc.in_features, len(CLASSES))
+            elif 'features.0.0.weight' in test_model_file:
+                if 'efficientnet' in model_file.lower():
+                    from torchvision.models import efficientnet_b0
+                    test_model = efficientnet_b0()
+                    test_model.classifier[1] = nn.Linear(test_model.classifier[1].in_features, len(CLASSES))
+                elif 'mobilenet' in model_file.lower():
+                    from torchvision.models import mobilenet_v2
+                    test_model = mobilenet_v2()
+                    test_model.classifier[1] = nn.Linear(test_model.classifier[1].in_features, len(CLASSES))
+                else:
+                    from torchvision.models import efficientnet_b0
+                    test_model = efficientnet_b0()
+                    test_model.classifier[1] = nn.Linear(test_model.classifier[1].in_features, len(CLASSES))
+            else:
+                test_model = models.resnet18()
+                test_model.fc = nn.Linear(test_model.fc.in_features, len(CLASSES))
+            
+            test_model.load_state_dict(test_model_file)
             test_model = test_model.to(device)
             test_model.eval()
 
@@ -734,7 +753,7 @@ def main() -> None:
                 col_img, col_out = st.columns([2, 1])
 
                 with col_img:
-                    st.image(img_rgb, caption='Исходное изображение', use_container_width=True)
+                    st.image(img_rgb, caption='Исходное изображение', width='stretch')
 
                 if detect_faces_flag:
                     faces = detect_faces(img_bgr, scale_factor=scale_factor, min_neighbors=min_neighbors)
@@ -750,7 +769,7 @@ def main() -> None:
                         if probs_list:
                             overlay = overlay_prediction(img_bgr, faces, probs_list)
                             with col_img:
-                                st.image(overlay, caption='Результат детекции', use_container_width=True, channels='RGB')
+                                st.image(overlay, caption='Результат детекции', width='stretch', channels='RGB')
 
                             if show_probs:
                                 with col_out:
@@ -847,7 +866,7 @@ def main() -> None:
                     st.bar_chart(emotion_counts)
 
                     st.subheader("Детальные результаты")
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width='stretch')
 
                     st.subheader("Распределение уверенности")
                     fig, ax = plt.subplots()
@@ -982,7 +1001,7 @@ def main() -> None:
                     {'Класс': cls, 'ROC AUC': auc_val}
                     for cls, auc_val in roc_auc.items()
                 ])
-                st.dataframe(roc_df, use_container_width=True, hide_index=True)
+                st.dataframe(roc_df, width='stretch', hide_index=True)
 
                 st.markdown("### 🎯 ROC Curve")
                 st.pyplot(fig_roc)
@@ -1028,7 +1047,7 @@ def main() -> None:
                 {'Класс': cls, 'ROC AUC': auc_val}
                 for cls, auc_val in m['roc_auc'].items()
             ])
-            st.dataframe(roc_df, use_container_width=True, hide_index=True)
+            st.dataframe(roc_df, width='stretch', hide_index=True)
 
             st.markdown("### 🎯 ROC Curve")
             st.pyplot(m['fig_roc'])
@@ -1088,7 +1107,7 @@ def main() -> None:
                     display_df = df[['rank_emoji', 'model', 'accuracy', 'f1_macro', 'roc_auc_avg']].copy()
                     display_df.columns = ['Ранг', 'Модель', 'Accuracy', 'F1 Macro', 'Avg ROC AUC']
 
-                    st.dataframe(display_df, use_container_width=True)
+                    st.dataframe(display_df, width='stretch')
 
                     st.success(f"🏆 **Победитель:** {winner['model']} (Accuracy: {winner['accuracy']:.4f}, F1: {winner['f1_macro']:.4f})")
 
@@ -1160,7 +1179,7 @@ def main() -> None:
                                     {'Класс': k, 'ROC AUC': f"{v:.4f}"}
                                     for k, v in row['roc_auc'].items()
                                 ])
-                                st.dataframe(roc_auc_df, use_container_width=True)
+                                st.dataframe(roc_auc_df, width='stretch')
 
                     st.divider()
 
@@ -1342,13 +1361,6 @@ def main() -> None:
                                         img_buffer.seek(0)
 
                                         zip_file.writestr(f"roc_curve_{model_name}.png", img_buffer.getvalue())
-
-                                        metadata = f
-                                        if 'roc_auc' in model_result and isinstance(model_result['roc_auc'], dict):
-                                            for cls, auc_val in model_result['roc_auc'].items():
-                                                metadata += f"{cls}: {auc_val:.6f}\n"
-
-                                        zip_file.writestr(f"roc_metadata_{model_name}.txt", metadata)
 
                             zip_buffer.seek(0)
 
@@ -1742,7 +1754,7 @@ def main() -> None:
                 if 'last_test_results' in st.session_state and st.session_state.last_test_results:
                     st.success("✅ Результаты тестирования доступны для скачивания")
 
-                    if st.button("📦 Создать и сохранить ZIP-отчет", type="primary", use_container_width=True):
+                    if st.button("📦 Создать и сохранить ZIP-отчет", type="primary", width='stretch'):
                         try:
                             with st.spinner("🔄 Создание ZIP-архива..."):
 
@@ -1869,7 +1881,7 @@ def main() -> None:
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
                     video_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB),
-                                         channels="RGB", use_container_width=True)
+                                         channels="RGB", width='stretch')
 
                     if results:
                         emotion_counts = {}
@@ -1977,7 +1989,7 @@ def process_single_image(image_file, face_cascade, scale_factor, min_neighbors, 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
             st.image(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB),
-                    caption="Результаты детекции", use_container_width=True)
+                    caption="Результаты детекции", width='stretch')
 
             st.subheader("📊 Детальные результаты")
 
@@ -2009,7 +2021,7 @@ def process_single_image(image_file, face_cascade, scale_factor, min_neighbors, 
                     for emotion, count in emotion_counts.items()
                 ]
                 stats_df = pd.DataFrame(stats_data)
-                st.dataframe(stats_df, use_container_width=True)
+                st.dataframe(stats_df, width='stretch')
 
                 fig, ax = plt.subplots(figsize=(8, 4))
                 emotions = list(emotion_counts.keys())
@@ -2051,7 +2063,7 @@ def process_single_image(image_file, face_cascade, scale_factor, min_neighbors, 
                 for i, prob in enumerate(probs):
                     st.write(f"- {CLASSES[i]}: {prob:.2%}")
 
-            st.image(image, caption="Исходное изображение", use_container_width=True)
+            st.image(image, caption="Исходное изображение", width='stretch')
 
     except Exception as e:
         st.error(f"❌ Ошибка при обработке изображения: {e}")
@@ -2202,7 +2214,7 @@ def create_complete_zip_report(all_results, df, winner, all_test_infos, test_pat
 
                     zip_file.writestr(f"roc_curves/roc_metadata_{model_name}.txt", metadata)
 
-            readme_content = f
+            readme_content = ""
             zip_file.writestr("README.txt", readme_content)
             print("DEBUG: README добавлен в ZIP")
 
