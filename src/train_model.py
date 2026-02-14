@@ -24,7 +24,7 @@ model_save_path = os.environ.get("MODEL_PATH", "wafflelover404_emotion_model.pth
 fast_mode = os.environ.get("FAST", "0") == "1"
 img_size = int(os.environ.get("IMG_SIZE", "128" if fast_mode else "224"))
 batch_size = int(os.environ.get("BATCH_SIZE", "128" if fast_mode else "32"))
-num_epochs = int(os.environ.get("EPOCHS", "2" if fast_mode else "5"))
+num_epochs = int(os.environ.get("EPOCHS", "2" if fast_mode else "30"))
 
 lr = float(os.environ.get("LR", "0.001" if fast_mode else "0.0003"))
 weight_decay = float(os.environ.get("WEIGHT_DECAY", "0.0" if fast_mode else "0.01"))
