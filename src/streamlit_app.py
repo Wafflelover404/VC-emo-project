@@ -870,13 +870,6 @@ def main() -> None:
     with tab_metrics:
         st.subheader('Метрики и ROC модели')
 
-        col_test1, col_test2 = st.columns([2, 1])
-        with col_test1:
-            test_path = st.text_input('Путь к тестовому набору', value='test', key='metrics_test_path')
-        with col_test2:
-            st.metric("Batch size", batch_size)
-
-
         st.subheader(f"Текущая модель: {os.path.basename(model_path)}")
         calculate_button = st.button('📊 Вычислить метрики', type='primary')
 
