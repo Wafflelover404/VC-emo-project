@@ -26,9 +26,9 @@ img_size = int(os.environ.get("IMG_SIZE", "128" if fast_mode else "224"))
 batch_size = int(os.environ.get("BATCH_SIZE", "128" if fast_mode else "32"))
 num_epochs = int(os.environ.get("EPOCHS", "2" if fast_mode else "30"))
 
-lr = float(os.environ.get("LR", "0.001" if fast_mode else "0.0003"))
-weight_decay = float(os.environ.get("WEIGHT_DECAY", "0.0" if fast_mode else "0.01"))
-unfreeze = os.environ.get("UNFREEZE", "none" if fast_mode else "layer4")
+lr = float(os.environ.get("LR", "0.001" if fast_mode else "0.001"))
+weight_decay = float(os.environ.get("WEIGHT_DECAY", "0.0" if fast_mode else "0.001"))
+unfreeze = os.environ.get("UNFREEZE", "none" if fast_mode else "all")
 
 
 classes = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
@@ -47,14 +47,15 @@ def log(msg: str) -> None:
 
 data_transforms = {
     'train': transforms.Compose([
-        transforms.RandomResizedCrop(img_size),
-        transforms.RandomHorizontalFlip(),
+        transforms.Resize((img_size, img_size)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(15),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
     'test': transforms.Compose([
-        transforms.Resize(img_size + 32),
-        transforms.CenterCrop(img_size),
+        transforms.Resize((img_size, img_size)),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
@@ -116,9 +117,16 @@ else:
             param.requires_grad = False
 
 
-criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, dtype=torch.float32, device=device))
+criterion = nn.CrossEntropyLoss(weight=torch.tensor(class_weights, dtype=torch.float32, device=device), label_smoothing=0.1)
 optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=weight_decay)
-scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(num_epochs, 1))
+
+warmup_epochs = 2
+def lr_lambda(epoch):
+    if epoch < warmup_epochs:
+        return (epoch + 1) / warmup_epochs
+    return 0.5 * (1 + np.cos(np.pi * (epoch - warmup_epochs) / (num_epochs - warmup_epochs)))
+
+scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
 def train_model(model, criterion, optimizer, num_epochs=10):
@@ -148,6 +156,7 @@ def train_model(model, criterion, optimizer, num_epochs=10):
                     loss = criterion(outputs, labels)
                     if phase == 'train':
                         loss.backward()
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                         optimizer.step()
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
