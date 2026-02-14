@@ -876,6 +876,8 @@ def main() -> None:
         with col_test2:
             st.metric("Batch size", batch_size)
 
+
+        st.subheader(f"Текущая модель: {os.path.basename(model_path)}")
         calculate_button = st.button('📊 Вычислить метрики', type='primary')
 
         if calculate_button:
@@ -1054,120 +1056,6 @@ def main() -> None:
             st.info("👆 Нажмите кнопку 'Вычислить метрики' для расчета метрик модели на тестовом наборе")
 
     with tab_testing:
-        st.subheader('Тестирование модели')
-
-        st.subheader("🎯 Тестирование выбранной модели")
-
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.write("**Текущая модель:**", os.path.basename(model_path))
-        with col2:
-            if st.button('🚀 Тестировать на всех изображениях', type='primary', key='test_selected_model'):
-                if os.path.exists("test") and os.path.isdir("test"):
-                    with st.spinner(f'🔄 Тестирую модель {os.path.basename(model_path)} на всех изображениях...'):
-                        try:
-
-                            total_images = 0
-                            emotion_counts = {}
-
-                            for emotion in CLASSES:
-                                emotion_path = os.path.join("test", emotion)
-                                if os.path.exists(emotion_path):
-                                    count = len([f for f in os.listdir(emotion_path)
-                                               if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
-                                    emotion_counts[emotion] = count
-                                    total_images += count
-
-                            if total_images > 0:
-                                st.info(f"📊 Найдено изображений: {total_images}")
-                                st.write("**Распределение по классам:**")
-                                for emotion, count in emotion_counts.items():
-                                    if count > 0:
-                                        st.write(f"- {emotion}: {count} изображений")
-
-                                metrics, test_info = run_model_tests(
-                                    model=model,
-                                    model_path=model_path,
-                                    test_path="test",
-                                    device=device,
-                                    img_size=img_size,
-                                    batch_size=batch_size
-                                )
-
-                                st.success("✅ Тестирование завершено!")
-
-                                roc_auc_avg = np.mean(list(metrics.roc_auc.values())) if metrics.roc_auc else 0.0
-                                inference_time = test_info.get('duration_seconds', 0.0)
-
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("🎯 Accuracy", f"{metrics.accuracy:.4f}")
-                                with col2:
-                                    st.metric("📊 F1 Macro", f"{metrics.f1_macro:.4f}")
-                                with col3:
-                                    st.metric("📈 ROC AUC", f"{roc_auc_avg:.4f}")
-                                with col4:
-                                    st.metric("⏱️ Время", f"{inference_time:.2f}s")
-
-                                st.subheader("📋 Classification Report")
-                                st.text(metrics.report)
-
-                                st.subheader("🔥 Confusion Matrix")
-                                fig, ax = plt.subplots(figsize=(8, 6))
-                                sns.heatmap(metrics.confusion_matrix,
-                                          annot=True, fmt='d', cmap='Blues',
-                                          xticklabels=CLASSES, yticklabels=CLASSES, ax=ax)
-                                ax.set_title('Confusion Matrix')
-                                ax.set_xlabel('Predicted')
-                                ax.set_ylabel('Actual')
-                                st.pyplot(fig)
-
-                                st.subheader("📈 ROC Curves")
-                                if hasattr(metrics.fig_roc, 'savefig'):
-                                    st.pyplot(metrics.fig_roc)
-                                else:
-                                    st.info("ROC curves не доступны")
-
-                            else:
-                                st.warning("Папка test пуста или не содержит изображений")
-
-                        except Exception as e:
-                            st.error(f"❌ Ошибка при тестировании: {e}")
-                            import traceback
-                            st.error(f"Детали ошибки: {traceback.format_exc()}")
-                else:
-                    st.error("Стандартная папка test не найдена")
-
-        st.divider()
-
-        if st.button('Проверить стандартный test', key='check_standard_test'):
-            if os.path.exists("test") and os.path.isdir("test"):
-                st.info("Стандартный тестовый набор найден и готов к использованию")
-
-                total_images = 0
-                emotion_counts = {}
-
-                for emotion in CLASSES:
-                    emotion_path = os.path.join("test", emotion)
-                    if os.path.exists(emotion_path):
-                        count = len([f for f in os.listdir(emotion_path)
-                                   if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
-                        emotion_counts[emotion] = count
-                        total_images += count
-
-                if total_images > 0:
-                    st.write(f"**Всего изображений в test:** {total_images}")
-                    st.write("**Распределение по классам:**")
-                    for emotion, count in emotion_counts.items():
-                        if count > 0:
-                            st.write(f"- {emotion}: {count} изображений")
-                else:
-                    st.warning("Папка test пуста или не содержит изображений")
-            else:
-                st.error("Стандартная папка test не найдена")
-
-        st.divider()
-
         st.subheader("Сравнительное тестирование всех моделей")
 
         if st.button('🚀 Тестировать все модели', type='primary', key='test_all_models'):
